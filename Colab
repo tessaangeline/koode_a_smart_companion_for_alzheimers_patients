@@ -1,0 +1,166 @@
+import pandas as pd
+
+# 1. Load main sensor data
+data = pd.read_csv('FallAllD_Wrist_AccGyr.csv')
+
+# 2. Load labels (ActivityID + Description)
+labels = pd.read_csv('activity_info.csv')
+
+# 3. Merge on ActivityID
+merged_data = data.merge(labels, on='ActivityID', how='left')
+
+print(merged_data.head())
+print(merged_data.columns)
+
+data2 = merged_data.copy()
+
+data2['Description'] = data2['Description'].where(
+    data2['Description'] != 'Unknown activity',
+    other='Unusual activity'
+)
+
+X = data2[['Acc_X', 'Acc_Y', 'Acc_Z', 'Gyr_X', 'Gyr_Y', 'Gyr_Z']]
+y = data2['Description']
+
+fall_keywords = ['Fall', 'fall']
+
+data2['label'] = data2['Description'].apply(
+    lambda x: 1 if any(k in x for k in fall_keywords) else 0
+)
+
+
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+data2[['Acc_X','Acc_Y','Acc_Z','Gyr_X','Gyr_Y','Gyr_Z']] = X_scaled
+
+
+WINDOW_SIZE = 200
+STEP_SIZE = 100
+
+features = []
+labels = []
+
+for i in range(0, len(data2) - WINDOW_SIZE, STEP_SIZE):
+    window = data2.iloc[i:i+WINDOW_SIZE]
+
+    # majority label in window
+    label = window['label'].mode()[0]
+
+    feat = [
+        window['Acc_X'].mean(),
+        window['Acc_Y'].mean(),
+        window['Acc_Z'].mean(),
+        window['Acc_X'].std(),
+        window['Acc_Y'].std(),
+        window['Acc_Z'].std(),
+        window['Gyr_X'].mean(),
+        window['Gyr_Y'].mean(),
+        window['Gyr_Z'].mean(),
+    ]
+
+    features.append(feat)
+    labels.append(label)
+
+
+X_final = pd.DataFrame(features)
+y_final = pd.Series(labels)
+
+
+WINDOW_SIZE = 200
+STEP_SIZE = 100
+
+features = []
+labels = []
+
+for i in range(0, len(data2) - WINDOW_SIZE, STEP_SIZE):
+    window = data2.iloc[i:i+WINDOW_SIZE]
+
+    label = window['label'].mode()[0]
+
+    feat = [
+        # Mean
+        window['Acc_X'].mean(),
+        window['Acc_Y'].mean(),
+        window['Acc_Z'].mean(),
+
+        # Std
+        window['Acc_X'].std(),
+        window['Acc_Y'].std(),
+        window['Acc_Z'].std(),
+
+        # Max (important for impact)
+        window['Acc_X'].max(),
+        window['Acc_Y'].max(),
+        window['Acc_Z'].max(),
+
+        # Min
+        window['Acc_X'].min(),
+        window['Acc_Y'].min(),
+        window['Acc_Z'].min(),
+
+        # Gyro mean
+        window['Gyr_X'].mean(),
+        window['Gyr_Y'].mean(),
+        window['Gyr_Z'].mean()
+    ]
+
+    features.append(feat)
+    labels.append(label)
+
+
+from sklearn.model_selection import train_test_split
+
+X_final = pd.DataFrame(features)
+y_final = pd.Series(labels)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_final,
+    y_final,
+    test_size=0.2,   # 80–20 ✅
+    random_state=42,
+    stratify=y_final
+)
+
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+model = RandomForestClassifier(
+    n_estimators=100,
+    max_depth=12,
+    class_weight={0:1, 1:2},  # prioritize falls
+    random_state=42,
+    n_jobs=-1
+)
+
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred))
+
+
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+X_final_scaled = scaler.fit_transform(X_final)
+
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_final_scaled, y_final,
+    test_size=0.2,
+    random_state=42,
+    stratify=y_final
+)
+
+model.fit(X_train, y_train)
+
+
+import joblib
+joblib.dump(model, "fall_model.pkl")
+joblib.dump(scaler, "scaler.pkl")
+
