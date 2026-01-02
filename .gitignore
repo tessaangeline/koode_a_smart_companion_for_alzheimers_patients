@@ -1,0 +1,21 @@
+# Flutter build files
+flutter_app/build/
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+
+# Python cache / virtual env
+__pycache__/
+*.pyc
+flask_server/venv/
+
+# Firebase / secrets (VERY IMPORTANT)
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist
+
+# macOS junk
+.DS_Store
+
+# ML models
+*.pkl
